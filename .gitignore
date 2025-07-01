@@ -1,0 +1,38 @@
+# Arduino IDE files
+build/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+
+# Arduino library files
+libraries/
+*.zip
+
+# Compiled files
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+*.dll
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Personal configuration (uncomment if you want to keep config private)
+# config.h
+
+# Logs
+*.log
