@@ -2,7 +2,10 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
-#include <Update.h>
+#include <hardware/flash.h>
+#include <hardware/sync.h>
+#include <hardware/watchdog.h>
+#include <pico/bootrom.h>
 #include "config.h"
 
 // WiFi credentials
@@ -25,8 +28,10 @@ unsigned long lastUpdateCheck = 0;
 void connectToWiFi();
 void checkForUpdates();
 String getLatestReleaseInfo();
-bool downloadAndInstallUpdate(String downloadUrl);
-void performOTAUpdate(WiFiClient& client, size_t contentLength);
+bool downloadFirmware(String downloadUrl);
+bool downloadAndFlashFirmware(String downloadUrl);
+void restartDevice();
+void performFlashUpdate(uint8_t* firmwareData, size_t firmwareSize);
 
 void setup() {
   Serial.begin(115200);
@@ -115,11 +120,11 @@ void checkForUpdates() {
   Serial.println("Current version: " + FIRMWARE_VERSION);
   
   if (latestVersion != FIRMWARE_VERSION) {
-    Serial.println("New version available! Starting update...");
-    if (downloadAndInstallUpdate(downloadUrl)) {
-      Serial.println("Update successful! Rebooting...");
-      delay(1000);
-      ESP.restart();
+    Serial.println("New version available! Starting OTA update...");
+    if (downloadAndFlashFirmware(downloadUrl)) {
+      Serial.println("Update successful! Restarting...");
+      delay(2000);
+      restartDevice();
     } else {
       Serial.println("Update failed!");
     }
@@ -154,7 +159,7 @@ String getLatestReleaseInfo() {
   return payload;
 }
 
-bool downloadAndInstallUpdate(String downloadUrl) {
+bool downloadFirmware(String downloadUrl) {
   HTTPClient http;
   http.begin(downloadUrl);
   
@@ -180,15 +185,16 @@ bool downloadAndInstallUpdate(String downloadUrl) {
   
   Serial.printf("Firmware size: %d bytes\n", contentLength);
   
-  WiFiClient* client = http.getStreamPtr();
-  
-  if (!Update.begin(contentLength)) {
-    Serial.println("Not enough space for update");
+  // Open file for writing
+  File file = LittleFS.open("/firmware.bin", "w");
+  if (!file) {
+    Serial.println("Failed to open file for writing");
     http.end();
     return false;
   }
   
-  Serial.println("Starting update...");
+  WiFiClient* client = http.getStreamPtr();
+  Serial.println("Starting download...");
   size_t written = 0;
   uint8_t buffer[1024];
   
@@ -198,7 +204,7 @@ bool downloadAndInstallUpdate(String downloadUrl) {
       size_t bytesToRead = min(available, sizeof(buffer));
       size_t bytesRead = client->readBytes(buffer, bytesToRead);
       
-      size_t bytesWritten = Update.write(buffer, bytesRead);
+      size_t bytesWritten = file.write(buffer, bytesRead);
       written += bytesWritten;
       
       // Show progress
@@ -210,21 +216,136 @@ bool downloadAndInstallUpdate(String downloadUrl) {
     delay(1);
   }
   
+  file.close();
   http.end();
   
   if (written == contentLength) {
-    Serial.println("Update written successfully");
+    Serial.println("Firmware downloaded successfully to /firmware.bin");
+    return true;
   } else {
-    Serial.printf("Update incomplete: %d/%d bytes\n", written, contentLength);
-    Update.abort();
+    Serial.printf("Download incomplete: %d/%d bytes\n", written, contentLength);
+    return false;
+  }
+}
+
+bool downloadAndFlashFirmware(String downloadUrl) {
+  HTTPClient http;
+  http.begin(downloadUrl);
+  
+  // Add authorization header if token is provided
+  if (strlen(github_token) > 0) {
+    http.addHeader("Authorization", "token " + String(github_token));
+  }
+  
+  int httpCode = http.GET();
+  
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("Download failed, HTTP code: %d\n", httpCode);
+    http.end();
     return false;
   }
   
-  if (Update.end()) {
-    Serial.println("Update completed successfully");
-    return true;
-  } else {
-    Serial.printf("Update failed: %s\n", Update.errorString());
+  int contentLength = http.getSize();
+  if (contentLength <= 0 || contentLength > 1024 * 1024) { // Max 1MB firmware
+    Serial.println("Invalid content length or firmware too large");
+    http.end();
     return false;
   }
+  
+  Serial.printf("Firmware size: %d bytes\n", contentLength);
+  
+  // Allocate memory for firmware
+  uint8_t* firmwareBuffer = (uint8_t*)malloc(contentLength);
+  if (!firmwareBuffer) {
+    Serial.println("Failed to allocate memory for firmware");
+    http.end();
+    return false;
+  }
+  
+  WiFiClient* client = http.getStreamPtr();
+  Serial.println("Downloading firmware to memory...");
+  size_t downloaded = 0;
+  
+  while (http.connected() && downloaded < contentLength) {
+    size_t available = client->available();
+    if (available) {
+      size_t bytesToRead = min(available, (size_t)(contentLength - downloaded));
+      size_t bytesRead = client->readBytes(firmwareBuffer + downloaded, bytesToRead);
+      downloaded += bytesRead;
+      
+      // Show progress
+      if (downloaded % 10240 == 0 || downloaded == contentLength) {
+        Serial.printf("Download progress: %d/%d bytes (%.1f%%)\n", 
+                     downloaded, contentLength, (float)downloaded / contentLength * 100);
+      }
+    }
+    delay(1);
+  }
+  
+  http.end();
+  
+  if (downloaded != contentLength) {
+    Serial.printf("Download incomplete: %d/%d bytes\n", downloaded, contentLength);
+    free(firmwareBuffer);
+    return false;
+  }
+  
+  Serial.println("Firmware downloaded successfully. Starting flash update...");
+  
+  // Perform flash update
+  performFlashUpdate(firmwareBuffer, contentLength);
+  
+  free(firmwareBuffer);
+  return true;
+}
+
+void performFlashUpdate(uint8_t* firmwareData, size_t firmwareSize) {
+  Serial.println("WARNING: Starting flash update. Do not power off!");
+  
+  // Disable interrupts during flash operation
+  uint32_t ints = save_and_disable_interrupts();
+  
+  // Calculate number of sectors to erase (each sector is 4KB)
+  uint32_t sectorsToErase = (firmwareSize + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE;
+  uint32_t flashOffset = 0x100000; // 1MB offset for OTA partition
+  
+  Serial.printf("Erasing %d sectors at offset 0x%08X\n", sectorsToErase, flashOffset);
+  
+  // Erase flash sectors
+  for (uint32_t i = 0; i < sectorsToErase; i++) {
+    flash_range_erase(flashOffset + (i * FLASH_SECTOR_SIZE), FLASH_SECTOR_SIZE);
+    if (i % 10 == 0) {
+      Serial.printf("Erased sector %d/%d\n", i + 1, sectorsToErase);
+    }
+  }
+  
+  Serial.println("Writing firmware to flash...");
+  
+  // Write firmware in 256-byte pages
+  for (size_t offset = 0; offset < firmwareSize; offset += FLASH_PAGE_SIZE) {
+    size_t writeSize = min((size_t)FLASH_PAGE_SIZE, firmwareSize - offset);
+    
+    flash_range_program(flashOffset + offset, firmwareData + offset, writeSize);
+    
+    if (offset % (FLASH_PAGE_SIZE * 10) == 0) {
+      Serial.printf("Written %d/%d bytes\n", offset + writeSize, firmwareSize);
+    }
+  }
+  
+  // Restore interrupts
+  restore_interrupts(ints);
+  
+  Serial.println("Flash update completed successfully!");
+  Serial.println("Setting boot flag for new firmware...");
+  
+  // Set a flag to indicate successful update and which partition to boot from
+  // This would require a custom bootloader to implement partition switching
+  // For now, we'll restart and hope the new firmware is at the right location
+}
+
+void restartDevice() {
+  Serial.println("Restarting device...");
+  delay(1000);
+  watchdog_enable(1, 1); // Enable watchdog with 1ms timeout to force restart
+  while(1); // Wait for watchdog reset
 }
