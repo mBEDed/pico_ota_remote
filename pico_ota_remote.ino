@@ -95,18 +95,18 @@ void checkForUpdates() {
   }
   
   // Parse JSON response
-  DynamicJsonDocument doc(2048);
+  JsonDocument doc;
   deserializeJson(doc, releaseInfo);
   
-  String latestVersion = doc["tag_name"];
+  String latestVersion = doc["tag_name"].as<String>();
   String downloadUrl = "";
   
   // Find the firmware file in assets
   JsonArray assets = doc["assets"];
   for (JsonObject asset : assets) {
-    String name = asset["name"];
+    String name = asset["name"].as<String>();
     if (name.endsWith(".bin") || name.endsWith(".ino.bin")) {
-      downloadUrl = asset["browser_download_url"];
+      downloadUrl = asset["browser_download_url"].as<String>();
       break;
     }
   }
