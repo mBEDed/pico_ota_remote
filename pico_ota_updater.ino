@@ -3,21 +3,22 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <Update.h>
+#include "config.h"
 
 // WiFi credentials
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
 // GitHub repository details
-const char* github_user = "YOUR_GITHUB_USERNAME";
-const char* github_repo = "YOUR_REPOSITORY_NAME";
-const char* github_token = "YOUR_GITHUB_TOKEN"; // Optional, for private repos
+const char* github_user = GITHUB_USER;
+const char* github_repo = GITHUB_REPO;
+const char* github_token = GITHUB_TOKEN; // Optional, for private repos
 
 // Current firmware version
-const String FIRMWARE_VERSION = "1.0.0";
+const String FIRMWARE_VERSION = CURRENT_VERSION;
 
 // Update check interval (in milliseconds)
-const unsigned long UPDATE_CHECK_INTERVAL = 300000; // 5 minutes
+const unsigned long UPDATE_CHECK_INTERVAL = UPDATE_CHECK_INTERVAL_MS;
 unsigned long lastUpdateCheck = 0;
 
 // Function declarations
