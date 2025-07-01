@@ -1,16 +1,16 @@
 // Configuration file for Pico W OTA Updater
-// Modify these values according to your setup
+// Copy this file to config.h and modify the values according to your setup
 
 #ifndef CONFIG_H
 #define CONFIG_H
 
 // WiFi Configuration
-#define WIFI_SSID "wifi"
-#define WIFI_PASSWORD "password"
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
 
 // GitHub Repository Configuration
-#define GITHUB_USER "userHarpreet"
-#define GITHUB_REPO "pico_ota_remote"
+#define GITHUB_USER "YOUR_GITHUB_USERNAME"
+#define GITHUB_REPO "YOUR_REPOSITORY_NAME"
 #define GITHUB_TOKEN ""  // Leave empty for public repos, add token for private repos
 
 // Firmware Configuration

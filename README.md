@@ -31,7 +31,11 @@ Install these libraries via Arduino IDE Library Manager:
 - LittleFS_Mbed_RP2040 (or equivalent filesystem library)
 
 ### 4. Configuration
-1. Open `config.h` and update:
+1. Copy `config.h.template` to `config.h`:
+   ```bash
+   cp config.h.template config.h
+   ```
+2. Open `config.h` and update:
    - `WIFI_SSID`: Your WiFi network name
    - `WIFI_PASSWORD`: Your WiFi password
    - `GITHUB_USER`: Your GitHub username

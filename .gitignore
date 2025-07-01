@@ -31,8 +31,8 @@ libraries/
 Thumbs.db
 Desktop.ini
 
-# Personal configuration (uncomment if you want to keep config private)
-# config.h
+# Personal configuration (keep config private)
+config.h
 
 # Logs
 *.log
