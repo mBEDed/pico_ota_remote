@@ -34,11 +34,11 @@ jobs:
         
     - name: Verify sketch compiles
       run: |
-        arduino-cli compile --fqbn rp2040:rp2040:rpipicow pico_ota_updater/pico_ota_updater.ino
+        arduino-cli compile --fqbn rp2040:rp2040:rpipicow pico_ota_remote.ino
         
     - name: Build firmware
       run: |
-        arduino-cli compile --fqbn rp2040:rp2040:rpipicow --output-dir ./build pico_ota_updater/pico_ota_updater.ino
+        arduino-cli compile --fqbn rp2040:rp2040:rpipicow --output-dir ./build pico_ota_remote.ino
         
     - name: List build files
       run: |
@@ -70,7 +70,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./build/pico_ota_updater.ino.bin
+        asset_path: ./build/pico_ota_remote.ino.bin
         asset_name: pico_firmware.bin
         asset_content_type: application/octet-stream
         
@@ -80,7 +80,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./build/pico_ota_updater.ino.uf2
+        asset_path: ./build/pico_ota_remote.ino.uf2
         asset_name: pico_firmware.uf2
         asset_content_type: application/octet-stream
       continue-on-error: true  # UF2 might not be generated for all builds

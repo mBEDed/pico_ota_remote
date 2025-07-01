@@ -54,7 +54,7 @@ The GitHub Action will automatically build the firmware and create a release wit
 
 ## Usage
 
-1. Upload the initial firmware to your Pico W using Arduino IDE
+1. Upload the initial firmware to your Pico W using Arduino IDE (open pico_ota_remote.ino)
 2. The device will connect to WiFi and check for updates every 5 minutes
 3. When you push a new version tag to GitHub, the device will automatically download and install the update
 4. Monitor the serial output to see update progress
